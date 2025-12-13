@@ -16,6 +16,8 @@ interface GameState {
     selectedBuildingId: string | null;
     placementMode: BuildingType | null;
     sunPosition: [number, number, number]; // [x, y, z]
+    contextMenu: { x: number; y: number; buildingId: string } | null;
+    hoveredBuildingId: string | null; // New state for hover
 
     addBuilding: (building: Building) => void;
     // updateBuildingPosition: (id: string, position: [number, number, number]) => void; // Deprecated by lift/drop
@@ -29,6 +31,8 @@ interface GameState {
 
     setPlacementMode: (type: BuildingType | null) => void;
     setSunPosition: (pos: [number, number, number]) => void;
+    setContextMenu: (menu: { x: number; y: number; buildingId: string } | null) => void;
+    setHoveredBuildingId: (id: string | null) => void;
 }
 
 export const useStore = create<GameState>((set, get) => ({
@@ -37,6 +41,8 @@ export const useStore = create<GameState>((set, get) => ({
     selectedBuildingId: null,
     placementMode: null,
     sunPosition: [50, 80, 50],
+    contextMenu: null,
+    hoveredBuildingId: null,
 
     addBuilding: (b) => set((state) => ({ buildings: [...state.buildings, b] })),
 
@@ -54,8 +60,10 @@ export const useStore = create<GameState>((set, get) => ({
     }),
 
     setSelection: (id) => set({ selectedBuildingId: id }),
-    setPlacementMode: (mode) => set({ placementMode: mode, selectedBuildingId: null, liftedBuilding: null }), // Reset lift on mode switch
+    setPlacementMode: (mode) => set({ placementMode: mode, selectedBuildingId: null, liftedBuilding: null, contextMenu: null }), // Reset everything
     setSunPosition: (pos) => set({ sunPosition: pos }),
+    setContextMenu: (menu) => set({ contextMenu: menu }),
+    setHoveredBuildingId: (id) => set({ hoveredBuildingId: id }),
 
     pickupBuilding: (id) => {
         const state = get();
@@ -64,7 +72,8 @@ export const useStore = create<GameState>((set, get) => ({
             set({
                 liftedBuilding: b,
                 buildings: state.buildings.filter(building => building.id !== id),
-                selectedBuildingId: id // Keep it selected for UI
+                selectedBuildingId: id, // Keep it selected for UI
+                contextMenu: null // Close menu if picking up
             });
         }
     },

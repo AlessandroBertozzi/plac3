@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, Suspense, useMemo } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
 import { Grid, Plane, Gltf } from '@react-three/drei';
 import { useStore } from '../../store';
 import { BUILDING_DATA } from '../../data/BuildingData';
@@ -8,14 +8,28 @@ import * as THREE from 'three';
 
 // --- GHOST COMPONENTS ---
 
-const AutoGhost = ({ hoverPos, def, onSizeChange, isValid }: { hoverPos: [number, number, number], def: any, onSizeChange: (w: number, d: number) => void, isValid: boolean }) => {
+// --- GHOST COMPONENTS ---
+
+const AutoGhost = ({ hoverPos, def, onSizeChange, isValid, isLifted = false }: { hoverPos: [number, number, number], def: any, onSizeChange: (w: number, d: number) => void, isValid: boolean, isLifted?: boolean }) => {
     // Only called if def.modelUrl exists
     const { width, depth, offset } = useModelSize(def.modelUrl, def.scale || 1);
+    const groupRef = useRef<THREE.Group>(null);
 
     // Update parent ref with actual size
     useEffect(() => {
         onSizeChange(width, depth);
     }, [width, depth, onSizeChange]);
+
+    useFrame((state) => {
+        if (!groupRef.current) return;
+        if (isLifted) {
+            const t = state.clock.getElapsedTime();
+            // Bounce when lifted
+            groupRef.current.position.y = Math.abs(Math.sin(t * 5)) * 0.5;
+        } else {
+            groupRef.current.position.y = 0;
+        }
+    });
 
     // Calculate snapped position using the GLB's size
     const xOffset = width % 2 !== 0 ? 0.5 : 0;
@@ -25,22 +39,37 @@ const AutoGhost = ({ hoverPos, def, onSizeChange, isValid }: { hoverPos: [number
 
     return (
         <group position={[x, 0, z]}>
+            {/* Base indicator stays on ground */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
                 <planeGeometry args={[width, depth]} />
                 <meshBasicMaterial color={isValid ? "#00ffff" : "#ff0000"} transparent opacity={0.5} />
             </mesh>
-            <Gltf src={def.modelUrl!} scale={def.scale || 1} position={offset || [0, 0, 0]} />
+            {/* Model bounces */}
+            <group ref={groupRef}>
+                <Gltf src={def.modelUrl!} scale={def.scale || 1} position={offset || [0, 0, 0]} />
+            </group>
         </group>
     );
 };
 
-const SimpleGhost = ({ hoverPos, def, onSizeChange, isValid }: { hoverPos: [number, number, number], def: any, onSizeChange: (w: number, d: number) => void, isValid: boolean }) => {
+const SimpleGhost = ({ hoverPos, def, onSizeChange, isValid, isLifted = false }: { hoverPos: [number, number, number], def: any, onSizeChange: (w: number, d: number) => void, isValid: boolean, isLifted?: boolean }) => {
     const width = def.width || 1;
     const depth = def.depth || 1;
+    const groupRef = useRef<THREE.Group>(null);
 
     useEffect(() => {
         onSizeChange(width, depth);
     }, [width, depth, onSizeChange]);
+
+    useFrame((state) => {
+        if (!groupRef.current) return;
+        if (isLifted) {
+            const t = state.clock.getElapsedTime();
+            groupRef.current.position.y = Math.abs(Math.sin(t * 5)) * 0.5;
+        } else {
+            groupRef.current.position.y = 0;
+        }
+    });
 
     const xOffset = width % 2 !== 0 ? 0.5 : 0;
     const zOffset = depth % 2 !== 0 ? 0.5 : 0;
@@ -53,10 +82,12 @@ const SimpleGhost = ({ hoverPos, def, onSizeChange, isValid }: { hoverPos: [numb
                 <planeGeometry args={[width, depth]} />
                 <meshBasicMaterial color={isValid ? def.color : "#ff0000"} transparent opacity={0.4} />
             </mesh>
-            <mesh position={[0, 0.5, 0]}>
-                <boxGeometry args={[width, 1, depth]} />
-                <meshStandardMaterial color={isValid ? def.color : "#ff0000"} transparent opacity={0.5} />
-            </mesh>
+            <group ref={groupRef}>
+                <mesh position={[0, 0.5, 0]}>
+                    <boxGeometry args={[width, 1, depth]} />
+                    <meshStandardMaterial color={isValid ? def.color : "#ff0000"} transparent opacity={0.5} />
+                </mesh>
+            </group>
         </group>
     );
 };
@@ -65,20 +96,22 @@ const PlacementLogic = ({
     hoverPos,
     activeDef,
     onSizeChange,
-    isValid
+    isValid,
+    isLifted = false
 }: {
     hoverPos: [number, number, number] | null,
     activeDef: any,
     onSizeChange: (w: number, d: number) => void,
-    isValid: boolean
+    isValid: boolean,
+    isLifted?: boolean
 }) => {
     if (!hoverPos || !activeDef) return null;
 
     if (activeDef.modelUrl) {
-        return <AutoGhost hoverPos={hoverPos} def={activeDef} onSizeChange={onSizeChange} isValid={isValid} />;
+        return <AutoGhost hoverPos={hoverPos} def={activeDef} onSizeChange={onSizeChange} isValid={isValid} isLifted={isLifted} />;
     }
 
-    return <SimpleGhost hoverPos={hoverPos} def={activeDef} onSizeChange={onSizeChange} isValid={isValid} />;
+    return <SimpleGhost hoverPos={hoverPos} def={activeDef} onSizeChange={onSizeChange} isValid={isValid} isLifted={isLifted} />;
 };
 
 // --- MAIN GRID COMPONENT ---
@@ -93,6 +126,8 @@ export const GameGrid = () => {
         liftedBuilding, // New state
         dropBuilding, // New action
         cancelPickup, // New action
+        contextMenu, // Re-add for footprint visualization
+        hoveredBuildingId, // Re-add for footprint visualization
         buildings
     } = useStore();
 
@@ -244,7 +279,7 @@ export const GameGrid = () => {
                     if (!liftedBuilding || !cursorPos) return null;
                     const def = BUILDING_DATA[liftedBuilding.type];
                     // Render the ghost for the lifted building
-                    return <PlacementLogic hoverPos={cursorPos} activeDef={def} onSizeChange={() => { }} isValid={isValid} />;
+                    return <PlacementLogic hoverPos={cursorPos} activeDef={def} onSizeChange={() => { }} isValid={isValid} isLifted={true} />;
                 })()}
             </Suspense>
 
@@ -270,6 +305,38 @@ export const GameGrid = () => {
                         <planeGeometry args={[w, d]} />
                         <meshBasicMaterial color="yellow" transparent opacity={0.3} />
                     </mesh>
+                );
+            })()}
+
+            {/* Active Building Highlight (Context Menu OR Hover) - Unified Visuals */}
+            {(() => {
+                // Determine which building to highlight
+                // Priority: Context Menu > Hovered
+                const targetId = contextMenu?.buildingId || hoveredBuildingId;
+
+                if (!targetId) return null;
+                const b = buildings.find(b => b.id === targetId);
+                if (!b) return null;
+
+                const def = BUILDING_DATA[b.type];
+                const w = b.dimensions?.width || def.width;
+                const d = b.dimensions?.depth || def.depth;
+
+                // Color: Uniform Cyan for all states as requested
+                const color = "#00ffff";
+
+                return (
+                    <group position={[b.position[0], 0.1, b.position[2]]}>
+                        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                            <planeGeometry args={[w, d]} />
+                            <meshBasicMaterial color={color} transparent opacity={0.3} />
+                        </mesh>
+                        {/* Outline for clarity */}
+                        <lineSegments position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                            <edgesGeometry args={[new THREE.PlaneGeometry(w, d)]} />
+                            <lineBasicMaterial color="#0088aa" linewidth={2} />
+                        </lineSegments>
+                    </group>
                 );
             })()}
         </group>

@@ -1,9 +1,9 @@
-import { Home, Factory, Milestone, MousePointer2, Trash2 } from 'lucide-react';
+import { Home, Factory, Milestone, MousePointer2 } from 'lucide-react';
 import { useStore, type BuildingType } from '../store';
 import clsx from 'clsx';
 
 export const HUD = () => {
-    const { placementMode, setPlacementMode, selectedBuildingId, removeBuilding } = useStore();
+    const { placementMode, setPlacementMode, selectedBuildingId } = useStore();
 
     const modes: { id: BuildingType | 'select'; icon: any; label: string }[] = [
         { id: 'select', icon: MousePointer2, label: 'Select' },
@@ -11,13 +11,6 @@ export const HUD = () => {
         { id: 'shop', icon: Factory, label: 'Industry' },
         { id: 'road', icon: Milestone, label: 'Road' },
     ];
-
-    const handleDelete = () => {
-        if (selectedBuildingId) {
-            removeBuilding(selectedBuildingId);
-            useStore.getState().setSelection(null);
-        }
-    };
 
     return (
         <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6">
@@ -36,12 +29,6 @@ export const HUD = () => {
                                 <h2 className="font-bold">Building Selected</h2>
                                 <p className="text-xs text-white/50">{selectedBuildingId.slice(0, 8)}</p>
                             </div>
-                            <button
-                                onClick={handleDelete}
-                                className="p-2 bg-red-500/20 hover:bg-red-500/40 text-red-200 rounded-lg transition-colors border border-red-500/30"
-                            >
-                                <Trash2 size={20} />
-                            </button>
                         </div>
                     )}
 

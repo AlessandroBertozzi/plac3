@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox, Gltf } from '@react-three/drei';
 import { useStore, type Building } from '../../store';
@@ -12,26 +12,32 @@ interface Props {
 }
 
 export const BuildingObject = ({ data, visible = true }: Props) => {
-    const { id, type, position, rotation } = data; // Destructure id here
-    const { pickupBuilding } = useStore();
-    const isSelected = false; // "Selected" state is now transitory (pickup), so visual selection is moot
+    const { id, type, position, rotation } = data;
+    const { pickupBuilding, contextMenu, setHoveredBuildingId } = useStore(); // Subscribe to contextMenu and setter
+    const isSelected = false;
     const meshRef = useRef<THREE.Group>(null);
     const def = BUILDING_DATA[type];
 
-    // Get auto-calculated size & offset for centering
-    // Note: This might cause a slight "pop" when loading if not preloaded, 
-    // but typically GLTF cache handles it.
     const { offset } = useModelSize(def.modelUrl, def.scale || 1);
-
-    const [hovered, setHover] = useState(false);
 
     // Animation loop
     useFrame((state) => {
         if (!meshRef.current) return;
-        // The "selected" animation is no longer needed as selection is transitory (pickup)
-        // and the lifted building is handled by the LiftedBuilding component.
-        // We ensure the building remains at y=0.
-        meshRef.current.position.y = 0;
+
+        // Check if this building is the target of the context menu
+        const isCtxTarget = contextMenu?.buildingId === id;
+
+        // Check if we should animate (Bounce ONLY on Context Menu Target)
+        // User requested NO bounce on hover.
+        const shouldBounce = isCtxTarget;
+
+        if (shouldBounce) {
+            const t = state.clock.getElapsedTime();
+            // Bouncing animation
+            meshRef.current.position.y = Math.abs(Math.sin(t * 5)) * 0.5;
+        } else {
+            meshRef.current.position.y = 0;
+        }
     });
 
     const handleClick = (e: any) => {
@@ -45,17 +51,47 @@ export const BuildingObject = ({ data, visible = true }: Props) => {
         pickupBuilding(id);
     };
 
+    const handleContextMenu = (e: any) => {
+        const store = useStore.getState();
+        if (store.liftedBuilding || store.placementMode) return;
+
+        e.stopPropagation();
+
+        useStore.getState().setContextMenu({
+            x: e.nativeEvent.clientX,
+            y: e.nativeEvent.clientY,
+            buildingId: id
+        });
+    };
+
+    const handlePointerOver = (e: any) => {
+        e.stopPropagation(); // Only hover the top-most building
+        setHoveredBuildingId(id);
+    };
+
+    const handlePointerOut = (e: any) => {
+        // Only clear if WE were the hovered one (simple check)
+        // In R3F pointer out bubbles, but we can just clear safely typically or rely on other enters
+        setHoveredBuildingId(null);
+    };
+
     return (
-        <group position={new THREE.Vector3(...position)} rotation={[0, rotation, 0]} visible={visible} ref={meshRef}>
+        <group
+            position={new THREE.Vector3(...position)}
+            rotation={[0, rotation, 0]}
+            visible={visible}
+            ref={meshRef}
+            onClick={handleClick}
+            onContextMenu={handleContextMenu}
+        >
             {/* If modelUrl exists, load GLB. Otherwise default to box shape. */}
             {def.modelUrl ? (
                 <Gltf
                     src={def.modelUrl}
                     scale={def.scale || 1}
                     position={offset || [0, 0, 0]}
-                    onClick={handleClick}
-                    onPointerOver={() => setHover(true)}
-                    onPointerOut={() => setHover(false)}
+                    onPointerOver={handlePointerOver}
+                    onPointerOut={handlePointerOut}
                 />
             ) : (
                 <group position={[0, 0.5, 0]}>
@@ -63,12 +99,11 @@ export const BuildingObject = ({ data, visible = true }: Props) => {
                         args={[def.width, 1, def.depth]}
                         radius={0.1}
                         smoothness={4}
-                        onClick={handleClick}
-                        onPointerOver={() => setHover(true)}
-                        onPointerOut={() => setHover(false)}
+                        onPointerOver={handlePointerOver}
+                        onPointerOut={handlePointerOut}
                     >
                         <meshStandardMaterial
-                            color={isSelected ? "#ffd700" : (hovered ? "#6fa8dc" : def.color)}
+                            color={isSelected ? "#ffd700" : (id === useStore.getState().hoveredBuildingId ? "#6fa8dc" : def.color)}
                             metalness={0.2}
                             roughness={0.8}
                         />
