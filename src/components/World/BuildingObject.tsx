@@ -8,13 +8,15 @@ import * as THREE from 'three';
 
 interface Props {
     data: Building;
+    visible?: boolean;
 }
 
-export const BuildingObject = ({ data }: Props) => {
-    const { selectedBuildingId, setSelection } = useStore();
-    const isSelected = selectedBuildingId === data.id;
+export const BuildingObject = ({ data, visible = true }: Props) => {
+    const { id, type, position, rotation } = data; // Destructure id here
+    const { pickupBuilding } = useStore();
+    const isSelected = false; // "Selected" state is now transitory (pickup), so visual selection is moot
     const meshRef = useRef<THREE.Group>(null);
-    const def = BUILDING_DATA[data.type];
+    const def = BUILDING_DATA[type];
 
     // Get auto-calculated size & offset for centering
     // Note: This might cause a slight "pop" when loading if not preloaded, 
@@ -26,21 +28,25 @@ export const BuildingObject = ({ data }: Props) => {
     // Animation loop
     useFrame((state) => {
         if (!meshRef.current) return;
-        const t = state.clock.getElapsedTime();
-        if (isSelected) {
-            meshRef.current.position.y = Math.sin(t * 5) * 0.1;
-        } else {
-            meshRef.current.position.y = 0;
-        }
+        // The "selected" animation is no longer needed as selection is transitory (pickup)
+        // and the lifted building is handled by the LiftedBuilding component.
+        // We ensure the building remains at y=0.
+        meshRef.current.position.y = 0;
     });
 
     const handleClick = (e: any) => {
+        // Prevent interaction if we are placing a building or moving another one
+        const store = useStore.getState();
+        if (store.placementMode || store.liftedBuilding) {
+            return;
+        }
+
         e.stopPropagation();
-        setSelection(data.id);
+        pickupBuilding(id);
     };
 
     return (
-        <group position={data.position} ref={meshRef}>
+        <group position={new THREE.Vector3(...position)} rotation={[0, rotation, 0]} visible={visible} ref={meshRef}>
             {/* If modelUrl exists, load GLB. Otherwise default to box shape. */}
             {def.modelUrl ? (
                 <Gltf

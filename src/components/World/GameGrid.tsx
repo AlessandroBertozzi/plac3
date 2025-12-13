@@ -84,7 +84,18 @@ const PlacementLogic = ({
 // --- MAIN GRID COMPONENT ---
 
 export const GameGrid = () => {
-    const { placementMode, addBuilding, selectedBuildingId, updateBuildingPosition, buildings } = useStore();
+    // Destructure new actions, remove deprecated ones
+    const {
+        placementMode,
+        setPlacementMode,
+        addBuilding,
+        selectedBuildingId,
+        liftedBuilding, // New state
+        dropBuilding, // New action
+        cancelPickup, // New action
+        buildings
+    } = useStore();
+
     const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null);
     const [isValid, setIsValid] = useState(true);
 
@@ -92,52 +103,38 @@ export const GameGrid = () => {
     const ghostSizeRef = useRef({ width: 1, depth: 1 });
 
     // --- COLLISION MAP CALCULATION ---
+    // Stores "x,y" -> "buildingId"
     const occupiedCells = useMemo(() => {
-        const set = new Set<string>();
-        buildings.forEach(b => {
-            // Determine size: prefer stored dims, fallback to static def, fallback to 1x1
+        const map = new Map<string, string>();
+        // Filter out the lifted building from the occupied cells map
+        buildings.filter(b => b.id !== liftedBuilding?.id).forEach(b => {
             const def = BUILDING_DATA[b.type];
             const w = b.dimensions?.width || def.width;
             const d = b.dimensions?.depth || def.depth;
-
-            // Calculate occupied integer cells for this building
-            // Center is b.position (e.g. 5.5, 0, 3.5 for 1x1) or (3,0,3 for 2x2?)
-            // We need to reverse the snap logic slightly to get the "min" cell top-left.
-
-            // Example 1x1 at 5.5 => Cell 5
-            // Example 2x2 at 3.0 => Offset was 0? wait.
-            // Snap logic: 
-            // Odd (1): x = floor(p.x) + 0.5. Input 5 -> 5.5.
-            // Even (2): x = floor(p.x) + 0. Input 5.5 -> 5.
-
-            // So if building is at X, knowing Width W:
-            // Center = X. 
-            // Min = X - W/2. 
-            // Range = [Minimize..Max]
 
             const startX = Math.round(b.position[0] - w / 2);
             const startZ = Math.round(b.position[2] - d / 2);
 
             for (let i = 0; i < w; i++) {
                 for (let j = 0; j < d; j++) {
-                    set.add(`${startX + i},${startZ + j}`);
+                    map.set(`${startX + i},${startZ + j}`, b.id);
                 }
             }
         });
-        return set;
-    }, [buildings]);
+        return map;
+    }, [buildings, liftedBuilding]);
 
     // --- HELPER: CHECK GHOST VALIDITY ---
+    // No more ignoreId needed because lifted building is not in 'buildings' list
     const checkCollision = (cx: number, cz: number, w: number, d: number) => {
-        // Calculate cells ghost would occupy
-        // Ghost Center is (cx, 0, cz)
         const startX = Math.round(cx - w / 2);
         const startZ = Math.round(cz - d / 2);
 
         for (let i = 0; i < w; i++) {
             for (let j = 0; j < d; j++) {
-                if (occupiedCells.has(`${startX + i},${startZ + j}`)) {
-                    return true; // Collision
+                const key = `${startX + i},${startZ + j}`;
+                if (occupiedCells.has(key)) {
+                    return true;
                 }
             }
         }
@@ -160,11 +157,19 @@ export const GameGrid = () => {
 
         // Check collision on move for instant feedback
         if (placementMode && currentDef) {
-            const w = ghostSizeRef.current.width; // Use current ref size (lag 1 frame ok)
+            const w = ghostSizeRef.current.width;
             const d = ghostSizeRef.current.depth;
             const snapped = getSnapped(e.point, w, d);
 
-            // Check collision
+            const collided = checkCollision(snapped[0], snapped[2], w, d);
+            setIsValid(!collided);
+        } else if (liftedBuilding) {
+            // Check collision for LIFTED building
+            const def = BUILDING_DATA[liftedBuilding.type];
+            const w = liftedBuilding.dimensions?.width || def.width;
+            const d = liftedBuilding.dimensions?.depth || def.depth;
+
+            const snapped = getSnapped(e.point, w, d);
             const collided = checkCollision(snapped[0], snapped[2], w, d);
             setIsValid(!collided);
         }
@@ -176,26 +181,26 @@ export const GameGrid = () => {
         const width = ghostSizeRef.current.width || currentDef?.width || 1;
         const depth = ghostSizeRef.current.depth || currentDef?.depth || 1;
 
-        if (selectedBuildingId) {
-            const b = useStore.getState().buildings.find(b => b.id === selectedBuildingId);
-            if (b) {
-                const def = BUILDING_DATA[b.type];
-                // For moving, we should ideally use the stored dimensions
-                const w = b.dimensions?.width || def.width;
-                const d = b.dimensions?.depth || def.depth;
+        if (liftedBuilding) {
+            const def = BUILDING_DATA[liftedBuilding.type];
+            const w = liftedBuilding.dimensions?.width || def.width;
+            const d = liftedBuilding.dimensions?.depth || def.depth;
 
-                const pos = getSnapped(e.point, w, d);
+            const pos = getSnapped(e.point, w, d);
 
-                // TODO: Collision check for move (exclude self)
-                updateBuildingPosition(selectedBuildingId, [pos[0], 0, pos[2]]);
+            // Check Collision (no ignore needed, it's lifted)
+            if (checkCollision(pos[0], pos[2], w, d)) {
+                console.log("Drop blocked: Collision");
+                return;
             }
+
+            dropBuilding([pos[0], 0, pos[2]]);
             return;
         }
 
         if (placementMode && currentDef) {
             const pos = getSnapped(e.point, width, depth);
 
-            // Final Validation before add
             if (checkCollision(pos[0], pos[2], width, depth)) {
                 console.log("Collision detected! Blocked.");
                 return;
@@ -206,8 +211,9 @@ export const GameGrid = () => {
                 type: placementMode,
                 position: [pos[0], 0, pos[2]],
                 rotation: 0,
-                dimensions: { width, depth } // Store calculated dimensions!
+                dimensions: { width, depth }
             });
+            setPlacementMode(null);
         }
     };
 
@@ -215,18 +221,57 @@ export const GameGrid = () => {
         <group>
             <Grid args={[50, 50]} cellSize={1} cellThickness={0.5} cellColor="#6f6f6f" sectionSize={5} sectionThickness={1} sectionColor="#9d4b4b" fadeDistance={30} infiniteGrid />
 
-            <Plane args={[100, 100]} rotation={[-Math.PI / 2, 0, 0]} visible={false} onPointerMove={handlePointerMove} onClick={handleClick} />
+            <Plane
+                args={[100, 100]}
+                rotation={[-Math.PI / 2, 0, 0]}
+                visible={false}
+                onPointerMove={handlePointerMove}
+                onClick={handleClick}
+                onContextMenu={(e) => {
+                    e.nativeEvent.preventDefault();
+                    cancelPickup();
+                    setPlacementMode(null);
+                }}
+            />
 
             <Suspense fallback={null}>
                 <PlacementLogic hoverPos={cursorPos} activeDef={currentDef} onSizeChange={updateGhostSize} isValid={isValid} />
             </Suspense>
 
-            {selectedBuildingId && !placementMode && cursorPos && (
-                <mesh position={[Math.floor(cursorPos[0]) + 0.5, 0.05, Math.floor(cursorPos[2]) + 0.5]} rotation={[-Math.PI / 2, 0, 0]}>
-                    <planeGeometry args={[1, 1]} />
-                    <meshBasicMaterial color="yellow" transparent opacity={0.3} />
-                </mesh>
-            )}
+            {/* Ghost for Lifted Building (Drag Effect) */}
+            <Suspense fallback={null}>
+                {(() => {
+                    if (!liftedBuilding || !cursorPos) return null;
+                    const def = BUILDING_DATA[liftedBuilding.type];
+                    // Render the ghost for the lifted building
+                    return <PlacementLogic hoverPos={cursorPos} activeDef={def} onSizeChange={() => { }} isValid={isValid} />;
+                })()}
+            </Suspense>
+
+            {/* Selected Indicator - Only if NOT lifted (static selection not really used in this new flow but kept for safety) */}
+            {(() => {
+                if (!selectedBuildingId || placementMode || !cursorPos || liftedBuilding) return null;
+
+                const b = buildings.find(b => b.id === selectedBuildingId);
+                if (!b) return null;
+
+                const def = BUILDING_DATA[b.type];
+                const w = b.dimensions?.width || def.width;
+                const d = b.dimensions?.depth || def.depth;
+
+                const xOffset = w % 2 !== 0 ? 0.5 : 0;
+                const zOffset = d % 2 !== 0 ? 0.5 : 0;
+
+                const snappedX = Math.floor(cursorPos[0]) + xOffset;
+                const snappedZ = Math.floor(cursorPos[2]) + zOffset;
+
+                return (
+                    <mesh position={[snappedX, 0.05, snappedZ]} rotation={[-Math.PI / 2, 0, 0]}>
+                        <planeGeometry args={[w, d]} />
+                        <meshBasicMaterial color="yellow" transparent opacity={0.3} />
+                    </mesh>
+                );
+            })()}
         </group>
     );
 };

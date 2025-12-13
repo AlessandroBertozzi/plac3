@@ -28,21 +28,42 @@ export const HUD = () => {
                     <p className="text-xs text-white/50 opacity-80">Isometric Placement System</p>
                 </div>
 
-                {/* Selected Info */}
-                {selectedBuildingId && (
-                    <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-white shadow-lg flex gap-4 items-center animate-in fade-in slide-in-from-right-4">
-                        <div>
-                            <h2 className="font-bold">Building Selected</h2>
-                            <p className="text-xs text-white/50">{selectedBuildingId.slice(0, 8)}</p>
+                <div className="flex flex-col gap-2 items-end">
+                    {/* Selected Info */}
+                    {selectedBuildingId && (
+                        <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-white shadow-lg flex gap-4 items-center animate-in fade-in slide-in-from-right-4">
+                            <div>
+                                <h2 className="font-bold">Building Selected</h2>
+                                <p className="text-xs text-white/50">{selectedBuildingId.slice(0, 8)}</p>
+                            </div>
+                            <button
+                                onClick={handleDelete}
+                                className="p-2 bg-red-500/20 hover:bg-red-500/40 text-red-200 rounded-lg transition-colors border border-red-500/30"
+                            >
+                                <Trash2 size={20} />
+                            </button>
                         </div>
-                        <button
-                            onClick={handleDelete}
-                            className="p-2 bg-red-500/20 hover:bg-red-500/40 text-red-200 rounded-lg transition-colors border border-red-500/30"
-                        >
-                            <Trash2 size={20} />
-                        </button>
+                    )}
+
+                    {/* Sun Control */}
+                    <div className="bg-white/10 backdrop-blur-md p-4 rounded-xl border border-white/20 text-white shadow-lg flex flex-col gap-2 w-64">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-sm font-bold">Sun Angle</h2>
+                            <span className="text-xs text-white/50">Simulate Time</span>
+                        </div>
+                        <input
+                            type="range"
+                            min="-100"
+                            max="100"
+                            defaultValue="50"
+                            className="w-full accent-yellow-400"
+                            onChange={(e) => {
+                                const x = parseInt(e.target.value);
+                                useStore.getState().setSunPosition([x, 80, 50]);
+                            }}
+                        />
                     </div>
-                )}
+                </div>
             </div>
 
             {/* Bottom Bar (Toolbar) */}
