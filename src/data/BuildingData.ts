@@ -25,8 +25,8 @@ export const BUILDING_DATA: Record<BuildingType, BuildingDef> = {
         label: 'Factory (Avocado)',
         width: 2,
         depth: 2,
-        modelUrl: '/models/avocado.glb',
-        scale: 15, // Avocado model is quite small usually
+        modelUrl: '/models/futuristic_building-transformed.glb',
+        scale: 0.5, // Avocado model is quite small usually
         color: '#e06c75'
     },
     road: {

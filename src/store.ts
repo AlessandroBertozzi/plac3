@@ -35,6 +35,13 @@ interface GameState {
     setHoveredBuildingId: (id: string | null) => void;
 }
 
+const DEFAULT_INTERACT_STATE = {
+    selectedBuildingId: null,
+    liftedBuilding: null,
+    contextMenu: null,
+    hoveredBuildingId: null
+};
+
 export const useStore = create<GameState>((set, get) => ({
     buildings: [],
     liftedBuilding: null,
@@ -51,7 +58,7 @@ export const useStore = create<GameState>((set, get) => ({
     removeBuilding: (id) => set((state) => {
         // If the building is currently lifted, clear it
         if (state.liftedBuilding?.id === id) {
-            return { liftedBuilding: null, selectedBuildingId: null };
+            return { ...DEFAULT_INTERACT_STATE };
         }
         return {
             buildings: state.buildings.filter(b => b.id !== id),
@@ -60,7 +67,7 @@ export const useStore = create<GameState>((set, get) => ({
     }),
 
     setSelection: (id) => set({ selectedBuildingId: id }),
-    setPlacementMode: (mode) => set({ placementMode: mode, selectedBuildingId: null, liftedBuilding: null, contextMenu: null }), // Reset everything
+    setPlacementMode: (mode) => set({ placementMode: mode, ...DEFAULT_INTERACT_STATE }), // Reset everything
     setSunPosition: (pos) => set({ sunPosition: pos }),
     setContextMenu: (menu) => set({ contextMenu: menu }),
     setHoveredBuildingId: (id) => set({ hoveredBuildingId: id }),
@@ -73,7 +80,8 @@ export const useStore = create<GameState>((set, get) => ({
                 liftedBuilding: b,
                 buildings: state.buildings.filter(building => building.id !== id),
                 selectedBuildingId: id, // Keep it selected for UI
-                contextMenu: null // Close menu if picking up
+                contextMenu: null, // Close menu if picking up
+                hoveredBuildingId: null // Clear hover on pickup
             });
         }
     },
@@ -84,8 +92,7 @@ export const useStore = create<GameState>((set, get) => ({
             const updated = { ...state.liftedBuilding, position };
             set({
                 buildings: [...state.buildings, updated],
-                liftedBuilding: null,
-                selectedBuildingId: null // Deselect after drop
+                ...DEFAULT_INTERACT_STATE
             });
         }
     },
@@ -96,9 +103,9 @@ export const useStore = create<GameState>((set, get) => ({
             // Return to original state implicitly by pushing it back
             set({
                 buildings: [...state.buildings, state.liftedBuilding],
-                liftedBuilding: null,
-                selectedBuildingId: null
+                ...DEFAULT_INTERACT_STATE
             });
         }
     }
 }));
+// End of file
