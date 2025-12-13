@@ -1,18 +1,24 @@
-# 3D Isometric City Builder
+# 3D Isometric Placement System
 
-A modern, Sims-inspired building placement system built with React and Three.js.
+A modern, Sims-inspired 3D building placement system built with React focusing on intuitive user interaction and visual fidelity.
 
-## Features
-- **True 3D Isometric View**: Orthographic camera with full 3D rendering.
-- **Smart Placement**: Grid-based snapping with ghost previews.
-- **Interactive Editing**: Click-to-select, move tools, and deletion.
-- **Modern UI**: Clean glassmorphism interface.
+## Scope & Mechanics
+
+This application demonstrates a robust grid-based placement engine commonly found in city builders and simulation games. It focuses on the "Game Loop" of placing, arranging, and managing objects in a 3D space.
+
+### Core Interactions
+- **Drag & Drop Placement**: Select buildings from the HUD and place them on the grid.
+- **Lift & Move**: Click any existing building to "lift" it up, moving it to a new location with a smooth ghost animation.
+- **Smart Validation**: Visual feedback turns red when placement is invalid (overlapping) and cyan for valid positioning.
+- **Grid Snapping**: Objects snap perfectly to a 1x1 logical grid while maintaining 3D visual presence.
+- **Context Menu**: Long-press or Right-click buildings to access options (Rotate, specific interactions).
+- **Ghost Mechanics**: Ghosts correctly handle collision detection and visual updates in real-time.
 
 ## Tech Stack
-- **Core**: React, TypeScript, Vite
-- **3D Engine**: React Three Fiber (Three.js)
-- **State**: Zustand
-- **Styling**: TailwindCSS v4
+- **Core**: React 19, TypeScript, Zustand (State Management)
+- **3D Engine**: Three.js via React Three Fiber (@react-three/drei)
+- **Styling**: TailwindCSS v4 for UI/HUD
+- **Tooling**: Vite for fast development
 
 ## Getting Started
 
@@ -26,4 +32,4 @@ A modern, Sims-inspired building placement system built with React and Three.js.
    npm run dev
    ```
 
-3. Open `http://localhost:5173` to play.
+3. Open `http://localhost:5173` to explore.
