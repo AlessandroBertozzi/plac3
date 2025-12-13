@@ -7,6 +7,7 @@ export interface Building {
     type: BuildingType;
     position: [number, number, number];
     rotation: number;
+    dimensions?: { width: number; depth: number };
 }
 
 interface GameState {
