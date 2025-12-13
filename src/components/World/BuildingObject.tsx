@@ -11,29 +11,60 @@ interface Props {
     visible?: boolean;
 }
 
+const BuildingMesh = ({ def, id, events, isPlacementOrLift }: { def: any, id: string, events: any, isPlacementOrLift: boolean }) => {
+    const { offset } = useModelSize(def.modelUrl, def.scale || 1);
+    const hoveredBuildingId = useStore(state => state.hoveredBuildingId);
+
+    // Common props for both mesh types
+    const commonProps = {
+        onPointerOver: events.onPointerOver,
+        onPointerOut: events.onPointerOut,
+        raycast: isPlacementOrLift ? () => null : undefined
+    };
+
+    if (def.modelUrl) {
+        return (
+            <Gltf
+                src={def.modelUrl}
+                scale={def.scale || 1}
+                position={offset || [0, 0, 0]}
+                {...commonProps}
+            />
+        );
+    }
+
+    return (
+        <group position={[0, 0.5, 0]}>
+            <RoundedBox
+                args={[def.width, 1, def.depth]}
+                radius={0.1}
+                smoothness={4}
+                {...commonProps}
+            >
+                <meshStandardMaterial
+                    color={id === hoveredBuildingId ? "#6fa8dc" : def.color}
+                    metalness={0.2}
+                    roughness={0.8}
+                />
+            </RoundedBox>
+        </group>
+    );
+};
+
 export const BuildingObject = ({ data, visible = true }: Props) => {
     const { id, type, position, rotation } = data;
-    const { pickupBuilding, contextMenu, setHoveredBuildingId } = useStore(); // Subscribe to contextMenu and setter
-    const isSelected = false;
+    const { pickupBuilding, setHoveredBuildingId } = useStore();
+    const contextMenu = useStore(state => state.contextMenu);
     const meshRef = useRef<THREE.Group>(null);
     const def = BUILDING_DATA[type];
-
-    const { offset } = useModelSize(def.modelUrl, def.scale || 1);
 
     // Animation loop
     useFrame((state) => {
         if (!meshRef.current) return;
-
-        // Check if this building is the target of the context menu
         const isCtxTarget = contextMenu?.buildingId === id;
 
-        // Check if we should animate (Bounce ONLY on Context Menu Target)
-        // User requested NO bounce on hover.
-        const shouldBounce = isCtxTarget;
-
-        if (shouldBounce) {
+        if (isCtxTarget) {
             const t = state.clock.getElapsedTime();
-            // Bouncing animation
             meshRef.current.position.y = Math.abs(Math.sin(t * 5)) * 0.5;
         } else {
             meshRef.current.position.y = 0;
@@ -41,11 +72,8 @@ export const BuildingObject = ({ data, visible = true }: Props) => {
     });
 
     const handleClick = (e: any) => {
-        // Prevent interaction if we are placing a building or moving another one
         const store = useStore.getState();
-        if (store.placementMode || store.liftedBuilding) {
-            return;
-        }
+        if (store.placementMode || store.liftedBuilding) return;
 
         e.stopPropagation();
         pickupBuilding(id);
@@ -54,9 +82,7 @@ export const BuildingObject = ({ data, visible = true }: Props) => {
     const handleContextMenu = (e: any) => {
         const store = useStore.getState();
         if (store.liftedBuilding || store.placementMode) return;
-
         e.stopPropagation();
-
         useStore.getState().setContextMenu({
             x: e.nativeEvent.clientX,
             y: e.nativeEvent.clientY,
@@ -65,14 +91,21 @@ export const BuildingObject = ({ data, visible = true }: Props) => {
     };
 
     const handlePointerOver = (e: any) => {
-        e.stopPropagation(); // Only hover the top-most building
+        const store = useStore.getState();
+        if (store.placementMode || store.liftedBuilding) return;
+        e.stopPropagation();
         setHoveredBuildingId(id);
     };
 
-    const handlePointerOut = (e: any) => {
-        // Only clear if WE were the hovered one (simple check)
-        // In R3F pointer out bubbles, but we can just clear safely typically or rely on other enters
+    const handlePointerOut = (_e: any) => {
         setHoveredBuildingId(null);
+    };
+
+    const isPlacementOrLift = useStore(state => !!state.placementMode || !!state.liftedBuilding);
+
+    const eventHandlers = {
+        onPointerOver: handlePointerOver,
+        onPointerOut: handlePointerOut
     };
 
     return (
@@ -83,33 +116,14 @@ export const BuildingObject = ({ data, visible = true }: Props) => {
             ref={meshRef}
             onClick={handleClick}
             onContextMenu={handleContextMenu}
+            raycast={isPlacementOrLift ? () => null : undefined}
         >
-            {/* If modelUrl exists, load GLB. Otherwise default to box shape. */}
-            {def.modelUrl ? (
-                <Gltf
-                    src={def.modelUrl}
-                    scale={def.scale || 1}
-                    position={offset || [0, 0, 0]}
-                    onPointerOver={handlePointerOver}
-                    onPointerOut={handlePointerOut}
-                />
-            ) : (
-                <group position={[0, 0.5, 0]}>
-                    <RoundedBox
-                        args={[def.width, 1, def.depth]}
-                        radius={0.1}
-                        smoothness={4}
-                        onPointerOver={handlePointerOver}
-                        onPointerOut={handlePointerOut}
-                    >
-                        <meshStandardMaterial
-                            color={isSelected ? "#ffd700" : (id === useStore.getState().hoveredBuildingId ? "#6fa8dc" : def.color)}
-                            metalness={0.2}
-                            roughness={0.8}
-                        />
-                    </RoundedBox>
-                </group>
-            )}
+            <BuildingMesh
+                def={def}
+                id={id}
+                events={eventHandlers}
+                isPlacementOrLift={isPlacementOrLift}
+            />
         </group>
     );
 };

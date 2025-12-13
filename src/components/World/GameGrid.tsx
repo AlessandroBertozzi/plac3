@@ -1,18 +1,23 @@
 import { useRef, useState, useEffect, Suspense, useMemo } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import { Grid, Plane, Gltf } from '@react-three/drei';
-import { useStore } from '../../store';
+import { useStore, type Building } from '../../store';
 import { BUILDING_DATA } from '../../data/BuildingData';
 import { useModelSize } from '../../hooks/useModelSize';
 import * as THREE from 'three';
 
 // --- GHOST COMPONENTS ---
 
-// --- GHOST COMPONENTS ---
+// --- GHOST RENDERER ---
+// Merges AutoGhost and SimpleGhost logic
+const GhostRenderer = ({ hoverPos, def, onSizeChange, isValid, isLifted = false }: { hoverPos: [number, number, number], def: any, onSizeChange: (w: number, d: number) => void, isValid: boolean, isLifted?: boolean }) => {
+    // Always call hook (rules of hooks), but rely on def dimensions if no URL
+    const { width: modelW, depth: modelD, offset } = useModelSize(def.modelUrl, def.scale || 1);
 
-const AutoGhost = ({ hoverPos, def, onSizeChange, isValid, isLifted = false }: { hoverPos: [number, number, number], def: any, onSizeChange: (w: number, d: number) => void, isValid: boolean, isLifted?: boolean }) => {
-    // Only called if def.modelUrl exists
-    const { width, depth, offset } = useModelSize(def.modelUrl, def.scale || 1);
+    // Determine actual dimensions to use
+    const width = def.modelUrl ? modelW : (def.width || 1);
+    const depth = def.modelUrl ? modelD : (def.depth || 1);
+
     const groupRef = useRef<THREE.Group>(null);
 
     // Update parent ref with actual size
@@ -24,14 +29,12 @@ const AutoGhost = ({ hoverPos, def, onSizeChange, isValid, isLifted = false }: {
         if (!groupRef.current) return;
         if (isLifted) {
             const t = state.clock.getElapsedTime();
-            // Bounce when lifted
             groupRef.current.position.y = Math.abs(Math.sin(t * 5)) * 0.5;
         } else {
             groupRef.current.position.y = 0;
         }
     });
 
-    // Calculate snapped position using the GLB's size
     const xOffset = width % 2 !== 0 ? 0.5 : 0;
     const zOffset = depth % 2 !== 0 ? 0.5 : 0;
     const x = Math.floor(hoverPos[0]) + xOffset;
@@ -39,55 +42,48 @@ const AutoGhost = ({ hoverPos, def, onSizeChange, isValid, isLifted = false }: {
 
     return (
         <group position={[x, 0, z]}>
-            {/* Base indicator stays on ground */}
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
                 <planeGeometry args={[width, depth]} />
-                <meshBasicMaterial color={isValid ? "#00ffff" : "#ff0000"} transparent opacity={0.5} />
+                <meshBasicMaterial color={isValid ? (def.modelUrl ? "#00ffff" : def.color) : "#ff0000"} transparent opacity={0.4} />
             </mesh>
-            {/* Model bounces */}
+
             <group ref={groupRef}>
-                <Gltf src={def.modelUrl!} scale={def.scale || 1} position={offset || [0, 0, 0]} />
+                {def.modelUrl ? (
+                    <Gltf src={def.modelUrl} scale={def.scale || 1} position={offset || [0, 0, 0]} />
+                ) : (
+                    <mesh position={[0, 0.5, 0]}>
+                        <boxGeometry args={[width, 1, depth]} />
+                        <meshStandardMaterial color={isValid ? def.color : "#ff0000"} transparent opacity={0.5} />
+                    </mesh>
+                )}
             </group>
         </group>
     );
 };
 
-const SimpleGhost = ({ hoverPos, def, onSizeChange, isValid, isLifted = false }: { hoverPos: [number, number, number], def: any, onSizeChange: (w: number, d: number) => void, isValid: boolean, isLifted?: boolean }) => {
-    const width = def.width || 1;
-    const depth = def.depth || 1;
-    const groupRef = useRef<THREE.Group>(null);
+// --- HIGHLIGHT RENDERER ---
+// Extracts context/hover footprint logic
+const BuildingHighlight = ({ targetId, buildings }: { targetId: string, buildings: Building[] }) => {
+    const b = buildings.find(b => b.id === targetId);
+    if (!b) return null;
 
-    useEffect(() => {
-        onSizeChange(width, depth);
-    }, [width, depth, onSizeChange]);
+    const def = BUILDING_DATA[b.type];
+    const w = b.dimensions?.width || def.width;
+    const d = b.dimensions?.depth || def.depth;
 
-    useFrame((state) => {
-        if (!groupRef.current) return;
-        if (isLifted) {
-            const t = state.clock.getElapsedTime();
-            groupRef.current.position.y = Math.abs(Math.sin(t * 5)) * 0.5;
-        } else {
-            groupRef.current.position.y = 0;
-        }
-    });
-
-    const xOffset = width % 2 !== 0 ? 0.5 : 0;
-    const zOffset = depth % 2 !== 0 ? 0.5 : 0;
-    const x = Math.floor(hoverPos[0]) + xOffset;
-    const z = Math.floor(hoverPos[2]) + zOffset;
+    // Cyan color for all states
+    const color = "#00ffff";
 
     return (
-        <group position={[x, 0, z]}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-                <planeGeometry args={[width, depth]} />
-                <meshBasicMaterial color={isValid ? def.color : "#ff0000"} transparent opacity={0.4} />
+        <group position={[b.position[0], 0.1, b.position[2]]}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]}>
+                <planeGeometry args={[w, d]} />
+                <meshBasicMaterial color={color} transparent opacity={0.3} />
             </mesh>
-            <group ref={groupRef}>
-                <mesh position={[0, 0.5, 0]}>
-                    <boxGeometry args={[width, 1, depth]} />
-                    <meshStandardMaterial color={isValid ? def.color : "#ff0000"} transparent opacity={0.5} />
-                </mesh>
-            </group>
+            <lineSegments position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <edgesGeometry args={[new THREE.PlaneGeometry(w, d)]} />
+                <lineBasicMaterial color="#0088aa" linewidth={2} />
+            </lineSegments>
         </group>
     );
 };
@@ -106,28 +102,22 @@ const PlacementLogic = ({
     isLifted?: boolean
 }) => {
     if (!hoverPos || !activeDef) return null;
-
-    if (activeDef.modelUrl) {
-        return <AutoGhost hoverPos={hoverPos} def={activeDef} onSizeChange={onSizeChange} isValid={isValid} isLifted={isLifted} />;
-    }
-
-    return <SimpleGhost hoverPos={hoverPos} def={activeDef} onSizeChange={onSizeChange} isValid={isValid} isLifted={isLifted} />;
+    // Remount on ID change to ensure hooks reset cleanly if type changes
+    return <GhostRenderer key={activeDef.id} hoverPos={hoverPos} def={activeDef} onSizeChange={onSizeChange} isValid={isValid} isLifted={isLifted} />;
 };
 
 // --- MAIN GRID COMPONENT ---
 
 export const GameGrid = () => {
-    // Destructure new actions, remove deprecated ones
     const {
         placementMode,
         setPlacementMode,
         addBuilding,
-        selectedBuildingId,
-        liftedBuilding, // New state
-        dropBuilding, // New action
-        cancelPickup, // New action
-        contextMenu, // Re-add for footprint visualization
-        hoveredBuildingId, // Re-add for footprint visualization
+        liftedBuilding,
+        dropBuilding,
+        cancelPickup,
+        contextMenu,
+        hoveredBuildingId,
         buildings
     } = useStore();
 
@@ -189,24 +179,17 @@ export const GameGrid = () => {
 
     const handlePointerMove = (e: any) => {
         setCursorPos([e.point.x, 0, e.point.z]);
+        const target = placementMode ? currentDef : (liftedBuilding ? BUILDING_DATA[liftedBuilding.type] : null);
 
-        // Check collision on move for instant feedback
-        if (placementMode && currentDef) {
-            const w = ghostSizeRef.current.width;
-            const d = ghostSizeRef.current.depth;
-            const snapped = getSnapped(e.point, w, d);
-
-            const collided = checkCollision(snapped[0], snapped[2], w, d);
-            setIsValid(!collided);
-        } else if (liftedBuilding) {
-            // Check collision for LIFTED building
-            const def = BUILDING_DATA[liftedBuilding.type];
-            const w = liftedBuilding.dimensions?.width || def.width;
-            const d = liftedBuilding.dimensions?.depth || def.depth;
+        if (target) {
+            const def = target;
+            // Use current ghost size if placing, or building def size if lifting
+            // Actually ghostSizeRef is updated by the rendered Ghost component
+            const w = placementMode ? ghostSizeRef.current.width : (liftedBuilding?.dimensions?.width || def?.width || 1);
+            const d = placementMode ? ghostSizeRef.current.depth : (liftedBuilding?.dimensions?.depth || def?.depth || 1);
 
             const snapped = getSnapped(e.point, w, d);
-            const collided = checkCollision(snapped[0], snapped[2], w, d);
-            setIsValid(!collided);
+            setIsValid(!checkCollision(snapped[0], snapped[2], w, d));
         }
     };
 
@@ -220,27 +203,22 @@ export const GameGrid = () => {
             const def = BUILDING_DATA[liftedBuilding.type];
             const w = liftedBuilding.dimensions?.width || def.width;
             const d = liftedBuilding.dimensions?.depth || def.depth;
-
             const pos = getSnapped(e.point, w, d);
 
-            // Check Collision (no ignore needed, it's lifted)
             if (checkCollision(pos[0], pos[2], w, d)) {
                 console.log("Drop blocked: Collision");
                 return;
             }
-
             dropBuilding([pos[0], 0, pos[2]]);
             return;
         }
 
         if (placementMode && currentDef) {
             const pos = getSnapped(e.point, width, depth);
-
             if (checkCollision(pos[0], pos[2], width, depth)) {
                 console.log("Collision detected! Blocked.");
                 return;
             }
-
             addBuilding({
                 id: crypto.randomUUID(),
                 type: placementMode,
@@ -251,6 +229,9 @@ export const GameGrid = () => {
             setPlacementMode(null);
         }
     };
+
+    // Calculate Highlight Target
+    const highlightTargetId = contextMenu?.buildingId || hoveredBuildingId;
 
     return (
         <group>
@@ -269,76 +250,30 @@ export const GameGrid = () => {
                 }}
             />
 
+            {/* Placement Ghost */}
             <Suspense fallback={null}>
-                <PlacementLogic hoverPos={cursorPos} activeDef={currentDef} onSizeChange={updateGhostSize} isValid={isValid} />
+                {currentDef && cursorPos && (
+                    <PlacementLogic hoverPos={cursorPos} activeDef={currentDef} onSizeChange={updateGhostSize} isValid={isValid} />
+                )}
             </Suspense>
 
-            {/* Ghost for Lifted Building (Drag Effect) */}
+            {/* Lifted Building Ghost */}
             <Suspense fallback={null}>
-                {(() => {
-                    if (!liftedBuilding || !cursorPos) return null;
-                    const def = BUILDING_DATA[liftedBuilding.type];
-                    // Render the ghost for the lifted building
-                    return <PlacementLogic hoverPos={cursorPos} activeDef={def} onSizeChange={() => { }} isValid={isValid} isLifted={true} />;
-                })()}
+                {liftedBuilding && cursorPos && (
+                    <PlacementLogic
+                        hoverPos={cursorPos}
+                        activeDef={BUILDING_DATA[liftedBuilding.type]}
+                        onSizeChange={updateGhostSize} // Still need to update ghost size for collision checks
+                        isValid={isValid}
+                        isLifted={true}
+                    />
+                )}
             </Suspense>
 
-            {/* Selected Indicator - Only if NOT lifted (static selection not really used in this new flow but kept for safety) */}
-            {(() => {
-                if (!selectedBuildingId || placementMode || !cursorPos || liftedBuilding) return null;
-
-                const b = buildings.find(b => b.id === selectedBuildingId);
-                if (!b) return null;
-
-                const def = BUILDING_DATA[b.type];
-                const w = b.dimensions?.width || def.width;
-                const d = b.dimensions?.depth || def.depth;
-
-                const xOffset = w % 2 !== 0 ? 0.5 : 0;
-                const zOffset = d % 2 !== 0 ? 0.5 : 0;
-
-                const snappedX = Math.floor(cursorPos[0]) + xOffset;
-                const snappedZ = Math.floor(cursorPos[2]) + zOffset;
-
-                return (
-                    <mesh position={[snappedX, 0.05, snappedZ]} rotation={[-Math.PI / 2, 0, 0]}>
-                        <planeGeometry args={[w, d]} />
-                        <meshBasicMaterial color="yellow" transparent opacity={0.3} />
-                    </mesh>
-                );
-            })()}
-
-            {/* Active Building Highlight (Context Menu OR Hover) - Unified Visuals */}
-            {(() => {
-                // Determine which building to highlight
-                // Priority: Context Menu > Hovered
-                const targetId = contextMenu?.buildingId || hoveredBuildingId;
-
-                if (!targetId) return null;
-                const b = buildings.find(b => b.id === targetId);
-                if (!b) return null;
-
-                const def = BUILDING_DATA[b.type];
-                const w = b.dimensions?.width || def.width;
-                const d = b.dimensions?.depth || def.depth;
-
-                // Color: Uniform Cyan for all states as requested
-                const color = "#00ffff";
-
-                return (
-                    <group position={[b.position[0], 0.1, b.position[2]]}>
-                        <mesh rotation={[-Math.PI / 2, 0, 0]}>
-                            <planeGeometry args={[w, d]} />
-                            <meshBasicMaterial color={color} transparent opacity={0.3} />
-                        </mesh>
-                        {/* Outline for clarity */}
-                        <lineSegments position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                            <edgesGeometry args={[new THREE.PlaneGeometry(w, d)]} />
-                            <lineBasicMaterial color="#0088aa" linewidth={2} />
-                        </lineSegments>
-                    </group>
-                );
-            })()}
+            {/* Selection / Context Menu Highlight */}
+            {highlightTargetId && (
+                <BuildingHighlight targetId={highlightTargetId} buildings={buildings} />
+            )}
         </group>
     );
 };
