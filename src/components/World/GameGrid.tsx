@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, Suspense, useMemo } from 'react';
-import { useThree, useFrame } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { Grid, Plane, Gltf } from '@react-three/drei';
 import { useStore, type Building } from '../../store';
 import { BUILDING_DATA } from '../../data/BuildingData';
@@ -118,10 +118,11 @@ export const GameGrid = () => {
         cancelPickup,
         contextMenu,
         hoveredBuildingId,
-        buildings
+        buildings,
+        cursorPos,
+        setCursorPos
     } = useStore();
 
-    const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null);
     const [isValid, setIsValid] = useState(true);
 
     const currentDef = placementMode ? BUILDING_DATA[placementMode] : null;

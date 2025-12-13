@@ -17,7 +17,8 @@ interface GameState {
     placementMode: BuildingType | null;
     sunPosition: [number, number, number]; // [x, y, z]
     contextMenu: { x: number; y: number; buildingId: string } | null;
-    hoveredBuildingId: string | null; // New state for hover
+    hoveredBuildingId: string | null;
+    cursorPos: [number, number, number] | null; // Shared cursor position
 
     addBuilding: (building: Building) => void;
     // updateBuildingPosition: (id: string, position: [number, number, number]) => void; // Deprecated by lift/drop
@@ -33,6 +34,7 @@ interface GameState {
     setSunPosition: (pos: [number, number, number]) => void;
     setContextMenu: (menu: { x: number; y: number; buildingId: string } | null) => void;
     setHoveredBuildingId: (id: string | null) => void;
+    setCursorPos: (pos: [number, number, number] | null) => void;
 }
 
 const DEFAULT_INTERACT_STATE = {
@@ -40,6 +42,7 @@ const DEFAULT_INTERACT_STATE = {
     liftedBuilding: null,
     contextMenu: null,
     hoveredBuildingId: null
+    // We do NOT reset cursorPos here typically, as mouse doesn't move just because state changed
 };
 
 export const useStore = create<GameState>((set, get) => ({
@@ -50,6 +53,7 @@ export const useStore = create<GameState>((set, get) => ({
     sunPosition: [50, 80, 50],
     contextMenu: null,
     hoveredBuildingId: null,
+    cursorPos: null,
 
     addBuilding: (b) => set((state) => ({ buildings: [...state.buildings, b] })),
 
@@ -71,6 +75,7 @@ export const useStore = create<GameState>((set, get) => ({
     setSunPosition: (pos) => set({ sunPosition: pos }),
     setContextMenu: (menu) => set({ contextMenu: menu }),
     setHoveredBuildingId: (id) => set({ hoveredBuildingId: id }),
+    setCursorPos: (pos) => set({ cursorPos: pos }),
 
     pickupBuilding: (id) => {
         const state = get();

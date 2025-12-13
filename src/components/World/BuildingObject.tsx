@@ -93,19 +93,33 @@ export const BuildingObject = ({ data, visible = true }: Props) => {
     const handlePointerOver = (e: any) => {
         const store = useStore.getState();
         if (store.placementMode || store.liftedBuilding) return;
+
         e.stopPropagation();
         setHoveredBuildingId(id);
+        // Important: Update cursor pos so if we lift this building, 
+        // the ghost knows where to start (instead of jumping to last known ground pos)
+        store.setCursorPos([e.point.x, 0, e.point.z]);
     };
 
     const handlePointerOut = (_e: any) => {
         setHoveredBuildingId(null);
     };
 
+    const handlePointerMove = (e: any) => {
+        const store = useStore.getState();
+        if (store.placementMode || store.liftedBuilding) return;
+
+        e.stopPropagation();
+        // Continuously update cursor pos while moving over the building
+        store.setCursorPos([e.point.x, 0, e.point.z]);
+    };
+
     const isPlacementOrLift = useStore(state => !!state.placementMode || !!state.liftedBuilding);
 
     const eventHandlers = {
         onPointerOver: handlePointerOver,
-        onPointerOut: handlePointerOut
+        onPointerOut: handlePointerOut,
+        onPointerMove: handlePointerMove
     };
 
     return (
