@@ -1,10 +1,6 @@
 # 3D Isometric Placement System
 
-A modern, Sims-inspired 3D building placement system built with React focusing on intuitive user interaction and visual fidelity.
-
-## Scope & Mechanics
-
-This application demonstrates a robust grid-based placement engine commonly found in city builders and simulation games. It focuses on the "Game Loop" of placing, arranging, and managing objects in a 3D space.
+This application demonstrates a grid-based placement engine commonly found in city builders and simulation games. It focuses on the "Game Loop" of placing, arranging, and managing objects in a 3D space.
 
 ### Core Interactions
 - **Drag & Drop Placement**: Select buildings from the HUD and place them on the grid.
