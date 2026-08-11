@@ -2,6 +2,8 @@
 
 This application demonstrates a grid-based placement engine commonly found in city builders and simulation games. It focuses on the "Game Loop" of placing, arranging, and managing objects in a 3D space.
 
+<img width="1536" height="1024" alt="demo" src="https://github.com/user-attachments/assets/54b3b9ff-e26c-4b86-98ef-9fed501223b3" />
+
 ### Core Interactions
 - **Drag & Drop Placement**: Select buildings from the HUD and place them on the grid.
 - **Lift & Move**: Click any existing building to "lift" it up, moving it to a new location with a smooth ghost animation.
